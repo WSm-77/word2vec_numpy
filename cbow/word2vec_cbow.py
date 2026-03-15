@@ -107,11 +107,11 @@ class Word2VecCBOW:
     def compute_loss(self, probs: np.ndarray, target_word: str) -> float:
         """Compute cross-entropy loss for one training example."""
         target_idx = self.word2idx[target_word]
-        loss = -np.log(probs[target_idx] + 1e-10)
+        loss = -np.log(float(probs[target_idx, 0]) + 1e-10)
 
         return loss
 
-    def compute_gradients(self, context_words, h_hat, probs, target_word: str) -> Tuple[np.ndarray, np.ndarray]:
+    def compute_gradients(self, context_words, h_hat, probs, target_word: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute gradients for the embedding and context matrices."""
         target_idx = self.word2idx[target_word]
 
@@ -125,7 +125,7 @@ class Word2VecCBOW:
         # Gradient w.r.t. h_hat (the average embedding)
         grad_h_hat = self.context_matrix @ grad_scores  # Shape: (embed_dim, 1)
 
-        # Gradinet w.r.t context words embeddings
+        # Gradient for each context embedding row (same vector distributed by mean op)
         grad_word_embeddings = grad_h_hat / len(context_words)
 
         return grad_word_embeddings, grad_h_hat, grad_context_matrix
@@ -137,12 +137,13 @@ class Word2VecCBOW:
         # Update context matrix
         self.context_matrix -= learning_rate * grad_context_matrix
 
-        # Update embeddings_matrix
-        for word, grad_context_word in zip(context_words, grad_word_embeddings):
+        # Update each context embedding with the same distributed gradient vector.
+        grad_context_vector = grad_word_embeddings.ravel()
+        for word in context_words:
             word_idx = self.word2idx[word]
-            self.embedding_matrix[word_idx] -= learning_rate * grad_context_word
+            self.embedding_matrix[word_idx] -= learning_rate * grad_context_vector
 
-    def train_example(self, context_words: Sequence[str], target_word: str, learning_rate: float = 0.01) -> None:
+    def train_example(self, context_words: Sequence[str], target_word: str, learning_rate: float = 0.01) -> float:
         """
         TODO add docs
         """
@@ -162,13 +163,13 @@ class Word2VecCBOW:
             total_loss = 0.0
 
             for context_words, target_word in zip(contexts, target_words):
-                example_loss = self.train_example(context_words, target_word)
+                example_loss = self.train_example(context_words, target_word, learning_rate=learning_rate)
                 total_loss += example_loss
 
-            epoch_loss = total_loss / len(context_words)
+            epoch_loss = total_loss / len(contexts)
             losses.append(epoch_loss)
 
-            print(f"Epoch loss: {epoch_loss}")
+            print(f"Epoch {epoch + 1}/{epochs} Epoch loss: {epoch_loss}")
 
 # Training Hyperparameters
 learning_rate: float = 0.05
