@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Dict, List, Sequence, Tuple
+from sortedcontainers import SortedSet
 
 def sigmoid(x: np.ndarray | float) -> np.ndarray | float:
     """Compute the sigmoid activation for a scalar or NumPy array."""
@@ -29,7 +30,7 @@ class Word2VecCBOW:
         self.embedding_matrix: np.ndarray = self.initialize_embeddings_matrix(len(self.vocab), embed_dim)
         self.context_matrix: np.ndarray = self.initialize_context_matrix(len(self.vocab), embed_dim)
 
-    def get_vocab(self, sentences: Sequence[str]) -> Tuple[List[str], Dict[str, int], Dict[int, str]]:
+    def get_vocab(self, sentences: Sequence[str]) -> Tuple[SortedSet[str], Dict[str, int], Dict[int, str]]:
         """
         Build sorted vocabulary and index mappings from the input sentences.
 
@@ -37,11 +38,11 @@ class Word2VecCBOW:
             sentences: Input corpus represented as a sequence of raw sentences.
 
         Returns:
-            Tuple[List[str], Dict[str, int], Dict[int, str]]: Sorted vocabulary,
+            Tuple[SortedSet[str], Dict[str, int], Dict[int, str]]: Sorted vocabulary,
             word-to-index mapping, and index-to-word mapping.
         """
         words = " ".join(sentences).split()
-        vocab = sorted(list(set(words)))
+        vocab = SortedSet(words)
         word2idx = {w: i for i, w in enumerate(vocab)}
         idx2word = {i: w for w, i in word2idx.items()}
         return vocab, word2idx, idx2word
