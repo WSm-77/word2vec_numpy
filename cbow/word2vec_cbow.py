@@ -164,7 +164,7 @@ class Word2VecCBOW:
         """
         return -target_word_context.T @ h_hat + np.log(np.sum(np.exp(self.context_matrix.T @ h_hat)))
 
-    def score_target_words(self, h_hat: np.ndarray) -> float:
+    def score_target_words(self, h_hat: np.ndarray) -> np.ndarray:
         """
         Compute raw vocabulary scores for a context embedding.
 
@@ -172,11 +172,11 @@ class Word2VecCBOW:
             h_hat: Averaged context embedding of shape (embed_dim, 1).
 
         Returns:
-            float: Raw scores for each vocabulary item.
+            np.ndarray: Raw scores for each target word in the vocabulary of shape (vocab_size, 1).
         """
         return self.context_matrix.T @ h_hat
 
-    def forward(self, context_words: Sequence[str]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def forward(self, context_words: Sequence[str]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Run the CBOW forward pass for a context window.
 
@@ -184,8 +184,7 @@ class Word2VecCBOW:
             context_words: Context words surrounding a target word.
 
         Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: Averaged context embedding,
-            raw vocabulary scores, and softmax probabilities.
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Averaged context embedding, softmax probabilities.
         """
         # Average of context embeddings
         h_hat = self.context_word_average(context_words)
@@ -198,7 +197,7 @@ class Word2VecCBOW:
 
         return h_hat, probs
 
-    def predict(self, context_words: Sequence[str], top_k: int = 3) -> str:
+    def predict(self, context_words: Sequence[str], top_k: int = 3) -> List[Dict[str, float]]:
         """
         Predict the k most likely target words for a given context.
 
@@ -207,7 +206,8 @@ class Word2VecCBOW:
             top_k: Number of highest-probability predictions to return.
 
         Returns:
-            str: Top-k predicted words with their probabilities.
+            List[Dict[str, float]]: List of dictionaries mapping predicted words
+            to their probabilities.
         """
         _, probs = self.forward(context_words)
         top_k_indices = np.argsort(probs.flatten())[::-1][:top_k]
@@ -230,7 +230,13 @@ class Word2VecCBOW:
 
         return loss
 
-    def compute_gradients(self, context_words, h_hat, probs, target_word: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def compute_gradients(
+        self,
+        context_words: Sequence[str],
+        h_hat: np.ndarray,
+        probs: np.ndarray,
+        target_word: str,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Compute gradients for the embedding and context matrices.
 
@@ -261,7 +267,14 @@ class Word2VecCBOW:
 
         return grad_word_embeddings, grad_h_hat, grad_context_matrix
 
-    def backward(self, context_words: Sequence[str], target_word: str, h_hat, probs, learning_rate: float = 0.01) -> None:
+    def backward(
+        self,
+        context_words: Sequence[str],
+        target_word: str,
+        h_hat: np.ndarray,
+        probs: np.ndarray,
+        learning_rate: float = 0.01,
+    ) -> None:
         """
         Perform backpropagation and update model parameters.
 
