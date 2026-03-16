@@ -211,9 +211,7 @@ class Word2VecCBOW:
         """
         _, probs = self.forward(context_words)
         top_k_indices = np.argsort(probs.flatten())[::-1][:top_k]
-        # TODO: remove
-        # print(probs.flatten())
-        # print(top_k_indices)
+
         return [{self.idx2word[idx] : probs[idx].item()} for idx in top_k_indices]
 
     def compute_loss(self, probs: np.ndarray, target_word: str) -> float:
@@ -317,6 +315,9 @@ class Word2VecCBOW:
             epoch loss.
         """
         losses = []
+        epochs_without_loss_improvement = 0
+        best_loss = float("inf")
+
         for epoch in range(epochs):
             total_loss = 0.0
 
@@ -328,3 +329,13 @@ class Word2VecCBOW:
             losses.append(epoch_loss)
 
             print(f"Epoch {epoch + 1}/{epochs} Epoch loss: {epoch_loss}")
+
+            if epoch_loss < best_loss:
+                best_loss = epoch_loss
+                epochs_without_loss_improvement = 0
+            else:
+                epochs_without_loss_improvement += 1
+
+            if epochs_without_loss_improvement >= max_epochs_without_loss_improvement:
+                print("Early stopping triggered.")
+                break
