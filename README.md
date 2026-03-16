@@ -1,4 +1,4 @@
-# Word2Vec with CBOW From Scratch
+# 🧠 Word2Vec with CBOW From Scratch
 
 This project implements a small Word2Vec-style Continuous Bag of Words (CBOW) model in NumPy and uses parquet datasets for training.
 
@@ -6,7 +6,7 @@ The implementation is intentionally simple and educational, so it does not use a
 
 The code follows the classic CBOW idea: average context word embeddings and predict the center word. For inference, the model uses a full softmax over the vocabulary. For training, the current implementation uses negative sampling to avoid the full-softmax bottleneck.
 
-## Project Structure
+## 📁 Project Structure
 
 ```text
 .
@@ -25,7 +25,7 @@ The code follows the classic CBOW idea: average context word embeddings and pred
 - an end-to-end training and evaluation workflow lives in `word2vec.ipynb`
 - data loading and preprocessing lives in `dataset/dataset.py`
 
-## What CBOW Does
+## 💡 What CBOW Does
 
 CBOW predicts a target word from the words around it.
 
@@ -43,7 +43,7 @@ and the target is `fox`, then with window size `2` the context is:
 
 In this project, that example is created by `get_cbow_example(...)`.
 
-## Model Parameters
+## ⚙️ Model Parameters
 
 The model has two learnable matrices:
 
@@ -65,7 +65,7 @@ self.embedding_matrix  # shape: (vocab_size, embed_dim)
 self.context_matrix    # shape: (embed_dim, vocab_size)
 ```
 
-## Data Pipeline
+## 🔄 Data Pipeline
 
 `DatasetLoader` in `dataset/dataset.py`:
 
@@ -84,7 +84,7 @@ So the training pipeline is:
 4. Generate CBOW `(context, target)` examples
 5. Train the model
 
-## Forward Pass
+## ➡️ Forward Pass
 
 Given context words $c_1, c_2, \dots, c_C$, CBOW first averages their embeddings.
 
@@ -123,7 +123,7 @@ $$
 
 This is implemented by `softmax(...)` and used in `forward(...)` and `forward_ids(...)`.
 
-## Full-Softmax Loss
+## 📉 Full-Softmax Loss
 
 For a target word index $t$, the full-softmax cross-entropy loss is:
 
@@ -148,7 +148,7 @@ In this codebase:
 - `compute_loss(...)` computes $-\log p_t$
 - `cross_entropy_loss(...)` expresses the same idea in expanded form
 
-## Full-Softmax Gradients
+## 🔁 Full-Softmax Gradients
 
 Although main training method uses negative sampling, the class still contains the standard full-softmax gradient implementation in:
 
@@ -174,7 +174,7 @@ $$
 where:
 
 $$
-1_{j=t} = \begin{cases}1 & \text{if } j = t \\ 0 & \text{otherwise} \end{cases}
+1_{j=t} = 1 \; \text{if } j = t \; 0 \; \text{otherwise}
 $$
 
 $$
@@ -280,7 +280,7 @@ grad_word_embeddings = grad_h_hat / len(context_words)
 
 This division by $C$ is one of the defining properties of CBOW: each context word receives only a fraction of the total gradient.
 
-## Why Training Uses Negative Sampling
+## ⚡ Why Training Uses Negative Sampling
 
 A full softmax requires scoring every vocabulary item for every training example:
 
@@ -297,7 +297,7 @@ Instead of optimizing probabilities over the entire vocabulary, the model treats
 - one positive pair: the true target word
 - a few negative pairs: randomly sampled incorrect words
 
-## Negative-Sampling Objective
+## 🎯 Negative-Sampling Objective
 
 Let:
 
@@ -330,7 +330,7 @@ loss = -np.log(positive_prob + 1e-10)
 loss -= np.sum(np.log(1.0 - negative_probs + 1e-10))
 ```
 
-## Negative-Sampling Gradients
+## 🔀 Negative-Sampling Gradients
 
 For the positive example, the error term is:
 
@@ -382,7 +382,7 @@ context_gradient = grad_h_hat / len(context_indices)
 np.add.at(self.embedding_matrix, context_indices, -learning_rate * context_gradient)
 ```
 
-## Important Implementation Note
+## 📝 Important Implementation Note
 
 This project currently mixes two views of CBOW, which presents two possible approaches to CBOW training.
 
@@ -391,7 +391,7 @@ This project currently mixes two views of CBOW, which presents two possible appr
 2. Training uses negative sampling for speed.
    - `train(...)` is much faster than naive full-softmax training
 
-## Training Overview
+## 🏋️ Training Overview
 
 `train(...)` performs:
 
@@ -401,7 +401,7 @@ This project currently mixes two views of CBOW, which presents two possible appr
 4. early stopping when loss stops improving
 5. timeout-based termination
 
-## Running The Project
+## 🚀 Running The Project
 
 Install dependencies:
 
@@ -420,7 +420,7 @@ The notebook demonstrates:
 5. saving and loading the model with `joblib`
 6. qualitative prediction checks on custom sentences
 
-## Limitations Of This Implementation
+## ⚠️ Limitations Of This Implementation
 
 This project is intentionally simple, so several limitations are present:
 
@@ -429,7 +429,7 @@ This project is intentionally simple, so several limitations are present:
 - notebook uses only the subset of data, so semantic quality is limited
 - the current negative sampling helper samples uniformly, not from the usual smoothed unigram distribution
 
-## Possible Next Improvements
+## 🔭 Possible Next Improvements
 
 Good next steps would be:
 
@@ -438,7 +438,7 @@ Good next steps would be:
 3. add a small intrinsic evaluation set for analogy or similarity testing
 4. support weighted context averaging by distance from the target word
 
-## Reference
+## 📚 Reference
 
 Brenndoerfer, Michael. "CBOW Model: Learning Word Embeddings by Predicting Center Words." 2025.
 
