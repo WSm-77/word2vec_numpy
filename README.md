@@ -174,7 +174,7 @@ $$
 where:
 
 $$
-1_{j=t} = 1 \; \text{if } j = t \; 0 \; \text{otherwise}
+1_{j=t} = 1 \space \text{if } j = t \space 0 \space \text{otherwise}
 $$
 
 $$
@@ -360,19 +360,19 @@ grad_h_hat += negative_outputs @ negative_errors
 The positive output vector update is:
 
 $$
-u_t \leftarrow u_t - \alpha \; e_{pos} \bar{h}
+u_t \leftarrow u_t - \alpha \space e_{pos} \bar{h}
 $$
 
 The negative output vectors update is:
 
 $$
-u_{n_i} \leftarrow u_{n_i} - \alpha \; e_{neg,i} \bar{h}
+u_{n_i} \leftarrow u_{n_i} - \alpha \space e_{neg,i} \bar{h}
 $$
 
 And each context embedding still receives an equal share of the hidden gradient:
 
 $$
-w_{c_i} \leftarrow w_{c_i} - \alpha \; \frac{1}{C} \frac{\partial L_{NS}}{\partial \bar{h}}
+w_{c_i} \leftarrow w_{c_i} - \alpha \space \frac{1}{C} \frac{\partial L_{NS}}{\partial \bar{h}}
 $$
 
 In code:
