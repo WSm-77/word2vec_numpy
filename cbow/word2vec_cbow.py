@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from typing import Dict, List, Sequence, Tuple
 from sortedcontainers import SortedSet
 
@@ -316,7 +317,15 @@ class Word2VecCBOW:
 
         return loss
 
-    def train(self, contexts: List[Sequence[str]], target_words: List[str], epochs: int = 100, learning_rate: float = 0.01, max_epochs_without_loss_improvement: int = 10) -> None:
+    def train(
+        self,
+        contexts: List[Sequence[str]],
+        target_words: List[str],
+        epochs: int = 100,
+        learning_rate: float = 0.01,
+        max_epochs_without_loss_improvement: int = 10,
+        timeout: float | None = None,
+    ) -> None:
         """
         Train the CBOW model across multiple epochs.
 
@@ -327,22 +336,37 @@ class Word2VecCBOW:
             learning_rate: Gradient descent learning rate.
             max_epochs_without_loss_improvement: Early stopping patience based on
             epoch loss.
+            timeout: Maximum wall-clock time (in seconds) to spend training.
+            If None or <= 0, timeout is disabled.
         """
         losses = []
         epochs_without_loss_improvement = 0
         best_loss = float("inf")
+        start_time = time.perf_counter()
+        timed_out = False
 
         for epoch in range(epochs):
             total_loss = 0.0
+            epoch_start_time = time.perf_counter()
 
             for context_words, target_word in zip(contexts, target_words):
+                if timeout is not None and timeout > 0 and (time.perf_counter() - start_time) >= timeout:
+                    timed_out = True
+                    elapsed = time.perf_counter() - start_time
+                    print(f"Timeout reached after {elapsed:.2f}s. Stopping training.")
+                    break
+
                 example_loss = self.train_example(context_words, target_word, learning_rate=learning_rate)
                 total_loss += example_loss
+
+            if timed_out:
+                break
 
             epoch_loss = total_loss / len(contexts)
             losses.append(epoch_loss)
 
-            print(f"Epoch {epoch + 1}/{epochs} Epoch loss: {epoch_loss}")
+            epoch_end_time = time.perf_counter()
+            print(f"Epoch {epoch + 1}/{epochs} Epoch loss: {epoch_loss} Time: {epoch_end_time - epoch_start_time:.2f}s")
 
             if epoch_loss < best_loss:
                 best_loss = epoch_loss
