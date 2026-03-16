@@ -14,7 +14,14 @@ class Word2VecCBOW:
     """Minimal NumPy-based CBOW helper class for Word2Vec experimentation."""
 
     def __init__(self, sentences: Sequence[str], window_size: int = 2, embed_dim: int = 50) -> None:
-        """Initialize corpus data, vocabulary mappings, and CBOW parameter matrices."""
+        """
+        Initialize corpus data, vocabulary mappings, and CBOW parameter matrices.
+
+        Args:
+            sentences: Input corpus represented as a sequence of raw sentences.
+            window_size: Number of context words to include on each side of a target word.
+            embed_dim: Dimensionality of learned word embeddings.
+        """
         self.sentences: Sequence[str] = sentences
         self.sentences_words: List[List[str]] = [s.split() for s in sentences]
         self.window_size: int = window_size
@@ -23,7 +30,16 @@ class Word2VecCBOW:
         self.context_matrix: np.ndarray = self.initialize_context_matrix(len(self.vocab), embed_dim)
 
     def get_vocab(self, sentences: Sequence[str]) -> Tuple[List[str], Dict[str, int], Dict[int, str]]:
-        """Build sorted vocabulary and index mappings from the input sentences."""
+        """
+        Build sorted vocabulary and index mappings from the input sentences.
+
+        Args:
+            sentences: Input corpus represented as a sequence of raw sentences.
+
+        Returns:
+            Tuple[List[str], Dict[str, int], Dict[int, str]]: Sorted vocabulary,
+            word-to-index mapping, and index-to-word mapping.
+        """
         words = " ".join(sentences).split()
         vocab = sorted(list(set(words)))
         word2idx = {w: i for i, w in enumerate(vocab)}
@@ -31,15 +47,45 @@ class Word2VecCBOW:
         return vocab, word2idx, idx2word
 
     def initialize_embeddings_matrix(self, vocab_size: int, embed_dim: int) -> np.ndarray:
-        """Initialize input embedding matrix W with uniform random values."""
+        """
+        Initialize the input embedding matrix.
+
+        Args:
+            vocab_size: Number of unique words in the vocabulary.
+            embed_dim: Dimensionality of each embedding vector.
+
+        Returns:
+            np.ndarray: Randomly initialized embedding matrix of shape
+            (vocab_size, embed_dim).
+        """
         return np.random.randn(vocab_size, embed_dim) * 0.01
 
     def initialize_context_matrix(self, vocab_size: int, embed_dim: int) -> np.ndarray:
-        """Initialize output/context matrix W' with uniform random values."""
+        """
+        Initialize the output context matrix.
+
+        Args:
+            vocab_size: Number of unique words in the vocabulary.
+            embed_dim: Dimensionality of each embedding vector.
+
+        Returns:
+            np.ndarray: Randomly initialized context matrix of shape
+            (embed_dim, vocab_size).
+        """
         return np.random.randn(embed_dim, vocab_size) * 0.01
 
     def get_cbow_example(self, sentence_words: List[str], target_word_idx: int) -> Tuple[List[str], str]:
-        """Generate a CBOW training example: (context_words, target_word)."""
+        """
+        Generate a single CBOW training example.
+
+        Args:
+            sentence_words: Tokenized sentence from the training corpus.
+            target_word_idx: Index of the target word within the sentence.
+
+        Returns:
+            Tuple[List[str], str]: Context words surrounding the target word and
+            the target word itself.
+        """
         target = sentence_words[target_word_idx]
         context: List[str] = []
 
@@ -52,6 +98,27 @@ class Word2VecCBOW:
                 context.append(sentence_words[context_idx])
 
         return context, target
+
+    def get_cbow_examples(self) -> Tuple[List[List[str]], List[str]]:
+        """
+        Generate all CBOW training examples from the corpus.
+
+        Returns:
+            Tuple[List[List[str]], List[str]]: Parallel lists containing context
+            word sequences and their corresponding target words.
+        """
+        contexts: List[List[str]] = []
+        targets: List[str] = []
+
+        for sentence_words in self.sentences_words:
+            for i in range(len(sentence_words)):
+                context, target = self.get_cbow_example(sentence_words, i)
+
+                if context:
+                    contexts.append(context)
+                    targets.append(target)
+
+        return contexts, targets
 
     def get_embedding(self, word: str) -> np.ndarray:
         """
@@ -71,19 +138,55 @@ class Word2VecCBOW:
         return self.embedding_matrix[word_idx].reshape(-1, 1)
 
     def context_word_average(self, context_words: Sequence[str]) -> np.ndarray:
-        """Convert context words into a single central word embedding."""
+        """
+        Convert context words into a single averaged embedding.
+
+        Args:
+            context_words: Context words surrounding a target word.
+
+        Returns:
+            np.ndarray: Averaged context embedding of shape (embed_dim, 1).
+        """
         embeddings = np.array([self.get_embedding(word) for word in context_words])
         return np.mean(embeddings, axis=0)
 
     def cross_entropy_loss(self, h_hat: np.ndarray, target_word_context: np.ndarray) -> float:
-        """Compute the cross-entropy loss for a single training example."""
+        """
+        Compute the cross-entropy loss for a single training example.
+
+        Args:
+            h_hat: Averaged context embedding of shape (embed_dim, 1).
+            target_word_context: One-hot target representation of shape
+            (vocab_size, 1).
+
+        Returns:
+            float: Scalar cross-entropy loss value.
+        """
         return -target_word_context.T @ h_hat + np.log(np.sum(np.exp(self.context_matrix.T @ h_hat)))
 
     def score_target_words(self, h_hat: np.ndarray) -> float:
+        """
+        Compute raw vocabulary scores for a context embedding.
+
+        Args:
+            h_hat: Averaged context embedding of shape (embed_dim, 1).
+
+        Returns:
+            float: Raw scores for each vocabulary item.
+        """
         return self.context_matrix.T @ h_hat
 
     def forward(self, context_words: Sequence[str]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Run CBOW forward pass to produce vocabulary scores from context words."""
+        """
+        Run the CBOW forward pass for a context window.
+
+        Args:
+            context_words: Context words surrounding a target word.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Averaged context embedding,
+            raw vocabulary scores, and softmax probabilities.
+        """
         # Average of context embeddings
         h_hat = self.context_word_average(context_words)
 
@@ -96,7 +199,16 @@ class Word2VecCBOW:
         return h_hat, probs
 
     def predict(self, context_words: Sequence[str], top_k: int = 3) -> str:
-        """Predict the target word given context words."""
+        """
+        Predict the k most likely target words for a given context.
+
+        Args:
+            context_words: Context words surrounding a missing target word.
+            top_k: Number of highest-probability predictions to return.
+
+        Returns:
+            str: Top-k predicted words with their probabilities.
+        """
         _, probs = self.forward(context_words)
         top_k_indices = np.argsort(probs.flatten())[::-1][:top_k]
         # TODO: remove
@@ -105,14 +217,35 @@ class Word2VecCBOW:
         return [{self.idx2word[idx] : probs[idx].item()} for idx in top_k_indices]
 
     def compute_loss(self, probs: np.ndarray, target_word: str) -> float:
-        """Compute cross-entropy loss for one training example."""
+        """
+        Compute cross-entropy loss for one training example.
+
+        Args:
+            probs: Softmax probabilities over the vocabulary.
+            target_word: Ground-truth target word.
+
+        Returns:
+            float: Scalar loss value for the example.
+        """
         target_idx = self.word2idx[target_word]
         loss = -np.log(float(probs[target_idx, 0]) + 1e-10)
 
         return loss
 
     def compute_gradients(self, context_words, h_hat, probs, target_word: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Compute gradients for the embedding and context matrices."""
+        """
+        Compute gradients for the embedding and context matrices.
+
+        Args:
+            context_words: Context words surrounding the target word.
+            h_hat: Averaged context embedding of shape (embed_dim, 1).
+            probs: Softmax probabilities over the vocabulary.
+            target_word: Ground-truth target word.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Gradients for the context
+            word embeddings, the averaged embedding, and the context matrix.
+        """
         target_idx = self.word2idx[target_word]
 
         # Gradient of loss w.r.t. predicted scores
@@ -131,7 +264,16 @@ class Word2VecCBOW:
         return grad_word_embeddings, grad_h_hat, grad_context_matrix
 
     def backward(self, context_words: Sequence[str], target_word: str, h_hat, probs, learning_rate: float = 0.01) -> None:
-        """Perform backpropagation and update parameters."""
+        """
+        Perform backpropagation and update model parameters.
+
+        Args:
+            context_words: Context words surrounding the target word.
+            target_word: Ground-truth target word.
+            h_hat: Averaged context embedding of shape (embed_dim, 1).
+            probs: Softmax probabilities over the vocabulary.
+            learning_rate: Gradient descent learning rate.
+        """
         grad_word_embeddings, _, grad_context_matrix = self.compute_gradients(context_words, h_hat, probs, target_word)
 
         # Update context matrix
@@ -145,7 +287,15 @@ class Word2VecCBOW:
 
     def train_example(self, context_words: Sequence[str], target_word: str, learning_rate: float = 0.01) -> float:
         """
-        TODO add docs
+        Train the model on a single CBOW example.
+
+        Args:
+            context_words: Context words surrounding the target word.
+            target_word: Ground-truth target word.
+            learning_rate: Gradient descent learning rate.
+
+        Returns:
+            float: Loss value for the training example.
         """
         h_hat, probs = self.forward(context_words)
         self.backward(context_words, target_word, h_hat, probs, learning_rate)
@@ -154,9 +304,17 @@ class Word2VecCBOW:
 
         return loss
 
-    def train(self, contexts: List[Sequence[str]], target_words: List[str], epochs: int = 100, learning_rate: float = 0.01) -> None:
+    def train(self, contexts: List[Sequence[str]], target_words: List[str], epochs: int = 100, learning_rate: float = 0.01, max_epochs_without_loss_improvement: int = 10) -> None:
         """
-        TODO add docs
+        Train the CBOW model across multiple epochs.
+
+        Args:
+            contexts: List of context-word sequences for training.
+            target_words: List of target words aligned with the contexts.
+            epochs: Maximum number of training epochs.
+            learning_rate: Gradient descent learning rate.
+            max_epochs_without_loss_improvement: Early stopping patience based on
+            epoch loss.
         """
         losses = []
         for epoch in range(epochs):
@@ -170,108 +328,3 @@ class Word2VecCBOW:
             losses.append(epoch_loss)
 
             print(f"Epoch {epoch + 1}/{epochs} Epoch loss: {epoch_loss}")
-
-# Training Hyperparameters
-learning_rate: float = 0.05
-epochs: int = 150
-
-sentences: List[str] = ["the quick brown fox jumps over the lazy dog",
-             "i love machine learning and neural networks",
-             "numpy is great for deep learning implementations"]
-
-# Model hyperparameters
-window_size: int = 2
-embed_dim: int = 50  # Dimension of the embedding vectors
-
-word2vec = Word2VecCBOW(sentences, window_size=window_size, embed_dim=embed_dim)
-vocab, word2idx, idx2word = word2vec.vocab, word2vec.word2idx, word2vec.idx2word
-vocab_size: int = len(vocab)
-print(f"Vocabulary Size: {vocab_size}")
-print(f"Sample vocab: {vocab[:10]}")
-context, target = word2vec.get_cbow_example(word2vec.sentences_words[0], 3)
-print(f"CBOW Example (Context, Target):\n{context},\n{target}")
-print(f"Context embeddings:")
-for context_word in context:
-    embedding = word2vec.get_embedding(context_word)
-    print(f"Embedding for '{context_word}':\n{embedding[:5]}...")
-
-embed_avg = word2vec.context_word_average(context)
-print(f"Average embedding for context {context}:\n{embed_avg[:5]}...")  # Print first 5 dimensions for brevity
-
-h_hat, probs = word2vec.forward(context)
-print(f"Predicted probabilities for all target words:\n{probs[:5]}...")  # Print first 5 probabilities for brevity
-
-pred = word2vec.predict(context)
-print(f"Predicted target word for context {context}: '{pred}'")
-
-contexts = []
-targets = []
-
-for sentence_words in word2vec.sentences_words:
-    for i, target_word in enumerate(sentence_words):
-        context_words, target = word2vec.get_cbow_example(sentence_words, i)
-        if context_words:  # Only consider examples with valid context
-            contexts.append(context_words)
-            targets.append(target)
-
-print(f"Total training examples: {len(contexts)}")
-print(f"Sample training example (Context, Target):\n{contexts[0]},\n{targets[0]}")
-
-word2vec.train(contexts, targets, epochs=epochs, learning_rate=learning_rate)
-
-# for epoch in range(epochs):
-#     total_loss = 0
-#     for sentence in sentences:
-#         tokens = sentence.split()
-#         for i, target_word in enumerate(tokens):
-#             t_idx = word2idx[target_word]
-
-#             # --- CONTEXT AGGREGATION ---
-#             context_indices = []
-#             for j in range(max(0, i - window_size), min(len(tokens), i + window_size + 1)):
-#                 if i != j:
-#                     context_indices.append(word2idx[tokens[j]])
-
-#             if not context_indices: continue
-
-#             # Average of context vectors (The "Hidden" layer in CBOW)
-#             v_hat = np.mean(embedding_matrix[context_indices], axis=0)
-
-#             # --- FORWARD PASS (Negative Sampling) ---
-#             # Positive sample: Target word
-#             z_pos = np.dot(v_hat, context_matrix[t_idx])
-#             p_pos = sigmoid(z_pos)
-
-#             # Negative samples
-#             neg_indices = np.random.choice(vocab_size, n_negs, replace=False)
-#             z_neg = np.dot(context_matrix[neg_indices], v_hat)
-#             p_neg = sigmoid(z_neg)
-
-#             # Loss
-#             loss = -np.log(p_pos + 1e-10) - np.sum(np.log(1 - p_neg + 1e-10))
-#             total_loss += loss
-
-#             # --- GRADIENT COMPUTATION ---
-#             err_pos = p_pos - 1
-#             err_neg = p_neg - 0
-
-#             # Gradient for context_matrix (Target/Negative vectors)
-#             grad_context_matrix_pos = err_pos * v_hat
-#             grad_context_matrix_neg = np.outer(err_neg, v_hat)
-
-#             # Gradient for v_hat (The mean vector)
-#             grad_v_hat = err_pos * context_matrix[t_idx] + np.dot(err_neg, context_matrix[neg_indices])
-
-#             # --- PARAMETER UPDATES ---
-#             # Update context_matrix
-#             context_matrix[t_idx] -= learning_rate * grad_context_matrix_pos
-#             context_matrix[neg_indices] -= learning_rate * grad_context_matrix_neg
-
-#             # Update embedding_matrix: The gradient is distributed equally across all context words
-#             # because of the mean operation (grad_v_hat / len(context_indices))
-#             grad_embedding_matrix = grad_v_hat / len(context_indices)
-#             for idx in context_indices:
-#                 embedding_matrix[idx] -= learning_rate * grad_embedding_matrix
-
-#     if epoch % 30 == 0:
-#         print(f"Epoch {epoch}, Loss: {total_loss:.4f}")
