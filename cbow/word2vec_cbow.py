@@ -1,6 +1,7 @@
 import numpy as np
 import time
 from typing import Dict, List, Sequence, Tuple
+from numbers import Number
 from sortedcontainers import SortedSet
 
 def sigmoid(x: np.ndarray | float) -> np.ndarray | float:
@@ -28,6 +29,7 @@ class Word2VecCBOW:
         self.sentences_words: List[List[str]] = [s.split() for s in sentences]
         self.window_size: int = window_size
         self.vocab, self.word2idx, self.idx2word = self.get_vocab(sentences)
+        self.sentences_ids: List[List[int]] = [self.words_to_ids(words) for words in self.sentences_words]
         self.embedding_matrix: np.ndarray = self.initialize_embeddings_matrix(len(self.vocab), embed_dim)
         self.context_matrix: np.ndarray = self.initialize_context_matrix(len(self.vocab), embed_dim)
 
@@ -47,6 +49,29 @@ class Word2VecCBOW:
         word2idx = {w: i for i, w in enumerate(vocab)}
         idx2word = {i: w for w, i in word2idx.items()}
         return vocab, word2idx, idx2word
+
+    def words_to_ids(self, words: Sequence[str]) -> List[int]:
+        """
+        Convert a sequence of words into vocabulary indices.
+
+        Args:
+            words: Token sequence to convert.
+
+        Returns:
+            List[int]: Vocabulary indices for the provided words.
+
+        Raises:
+            ValueError: If any word is not present in the vocabulary.
+        """
+        word_ids: List[int] = []
+
+        for word in words:
+            word_idx = self.word2idx.get(word)
+            if word_idx is None:
+                raise ValueError(f"Word '{word}' not in vocabulary.")
+            word_ids.append(word_idx)
+
+        return word_ids
 
     def initialize_embeddings_matrix(self, vocab_size: int, embed_dim: int) -> np.ndarray:
         """
@@ -101,6 +126,30 @@ class Word2VecCBOW:
 
         return context, target
 
+    def get_cbow_example_ids(self, sentence_word_ids: Sequence[int], target_word_idx: int) -> Tuple[List[int], int]:
+        """
+        Generate a single CBOW training example using token ids.
+
+        Args:
+            sentence_word_ids: Tokenized sentence represented by vocabulary indices.
+            target_word_idx: Index of the target token within the sentence.
+
+        Returns:
+            Tuple[List[int], int]: Context token ids and the target token id.
+        """
+        target_id = sentence_word_ids[target_word_idx]
+        context_ids: List[int] = []
+
+        for offset in range(-self.window_size, self.window_size + 1):
+            if offset == 0:
+                continue
+
+            context_idx = target_word_idx + offset
+            if 0 <= context_idx < len(sentence_word_ids):
+                context_ids.append(sentence_word_ids[context_idx])
+
+        return context_ids, target_id
+
     def get_cbow_examples(self) -> Tuple[List[List[str]], List[str]]:
         """
         Generate all CBOW training examples from the corpus.
@@ -122,6 +171,27 @@ class Word2VecCBOW:
 
         return contexts, targets
 
+    def get_cbow_examples_ids(self) -> Tuple[List[List[int]], List[int]]:
+        """
+        Generate all CBOW training examples from the corpus using token ids.
+
+        Returns:
+            Tuple[List[List[int]], List[int]]: Parallel lists containing context
+            token-id sequences and their corresponding target token ids.
+        """
+        contexts: List[List[int]] = []
+        targets: List[int] = []
+
+        for sentence_word_ids in self.sentences_ids:
+            for i in range(len(sentence_word_ids)):
+                context_ids, target_id = self.get_cbow_example_ids(sentence_word_ids, i)
+
+                if context_ids:
+                    contexts.append(context_ids)
+                    targets.append(target_id)
+
+        return contexts, targets
+
     def get_embedding(self, word: str) -> np.ndarray:
         """
         Retrieve the embedding vector for a given word.
@@ -139,6 +209,18 @@ class Word2VecCBOW:
 
         return self.embedding_matrix[word_idx].reshape(-1, 1)
 
+    def get_embedding_by_id(self, word_idx: int) -> np.ndarray:
+        """
+        Retrieve the embedding vector for a given vocabulary index.
+
+        Args:
+            word_idx: Vocabulary index of the target word.
+
+        Returns:
+            np.ndarray: Embedding vector of shape (embed_dim, 1).
+        """
+        return self.embedding_matrix[word_idx].reshape(-1, 1)
+
     def context_word_average(self, context_words: Sequence[str]) -> np.ndarray:
         """
         Convert context words into a single averaged embedding.
@@ -151,6 +233,20 @@ class Word2VecCBOW:
         """
         embeddings = np.array([self.get_embedding(word) for word in context_words])
         return np.mean(embeddings, axis=0)
+
+    def context_word_average_by_ids(self, context_word_ids: Sequence[int]) -> np.ndarray:
+        """
+        Convert context token ids into a single averaged embedding.
+
+        Args:
+            context_word_ids: Context words represented by vocabulary indices.
+
+        Returns:
+            np.ndarray: Averaged context embedding of shape (embed_dim, 1).
+        """
+        context_indices = np.asarray(context_word_ids, dtype=np.int64)
+        embeddings = self.embedding_matrix[context_indices]
+        return np.mean(embeddings, axis=0, keepdims=True).T
 
     def cross_entropy_loss(self, h_hat: np.ndarray, target_word_context: np.ndarray) -> float:
         """
@@ -186,7 +282,8 @@ class Word2VecCBOW:
             context_words: Context words surrounding a target word.
 
         Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: Averaged context embedding, softmax probabilities.
+            Tuple[np.ndarray, np.ndarray]: Averaged context embedding and softmax
+            probabilities.
         """
         # Average of context embeddings
         h_hat = self.context_word_average(context_words)
@@ -197,6 +294,22 @@ class Word2VecCBOW:
         # Probabilities
         probs = softmax(predicted_scores)  # Shape: (vocab_size, 1)
 
+        return h_hat, probs
+
+    def forward_ids(self, context_word_ids: Sequence[int]) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Run the CBOW forward pass for context token ids.
+
+        Args:
+            context_word_ids: Context words represented by vocabulary indices.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Averaged context embedding and softmax
+            probabilities over the vocabulary.
+        """
+        h_hat = self.context_word_average_by_ids(context_word_ids)
+        predicted_scores = self.score_target_words(h_hat)
+        probs = softmax(predicted_scores)
         return h_hat, probs
 
     def predict(self, context_words: Sequence[str], top_k: int = 3) -> List[Dict[str, float]]:
@@ -231,6 +344,127 @@ class Word2VecCBOW:
         loss = -np.log(float(probs[target_idx, 0]) + 1e-10)
 
         return loss
+
+    def compute_loss_by_id(self, probs: np.ndarray, target_idx: int) -> float:
+        """
+        Compute cross-entropy loss for one training example using a target id.
+
+        Args:
+            probs: Softmax probabilities over the vocabulary.
+            target_idx: Vocabulary index of the ground-truth target word.
+
+        Returns:
+            float: Scalar loss value for the example.
+        """
+        return -np.log(float(probs[target_idx, 0]) + 1e-10)
+
+    def sample_negative_indices(self, target_word_idx: int, n_samp: int = 32) -> np.ndarray:
+        """
+        Sample negative target indices for negative sampling training using a vectorized approach.
+
+        Args:
+            target_word_idx: Vocabulary index of the positive target word.
+            n_samp: Number of negative samples to draw.
+
+        Returns:
+            np.ndarray: Sampled negative vocabulary indices.
+        """
+        raw_samps = np.random.randint(0, len(self.vocab), size=n_samp)
+        neg_inds = raw_samps[raw_samps != target_word_idx]
+        return neg_inds
+
+    def train_example_negative_sampling(
+        self,
+        context_word_ids: Sequence[int],
+        target_idx: int,
+        learning_rate: float = 0.01,
+        num_negative_samples: int = 5,
+    ) -> float:
+        """
+        Train the model on a single CBOW example using negative sampling.
+
+        Args:
+            context_word_ids: Context words represented by vocabulary indices.
+            target_idx: Vocabulary index of the ground-truth target word.
+            learning_rate: Gradient descent learning rate.
+            num_negative_samples: Number of negative samples to use.
+
+        Returns:
+            float: Negative-sampling loss value for the training example.
+        """
+        if not context_word_ids:
+            return 0.0
+
+        context_indices = np.asarray(context_word_ids, dtype=np.int64)
+        h_hat = self.embedding_matrix[context_indices].mean(axis=0)
+
+        positive_output = self.context_matrix[:, target_idx].copy()
+        positive_score = float(h_hat @ positive_output)
+        positive_prob = float(sigmoid(positive_score))
+
+        negative_indices = self.sample_negative_indices(target_idx, num_negative_samples)
+        negative_outputs = self.context_matrix[:, negative_indices].copy() if negative_indices.size else np.empty((h_hat.shape[0], 0))
+        negative_scores = h_hat @ negative_outputs if negative_indices.size else np.empty(0, dtype=np.float64)
+        negative_probs = sigmoid(negative_scores) if negative_indices.size else np.empty(0, dtype=np.float64)
+        negative_probs = np.asarray(negative_probs, dtype=np.float64)
+
+        loss = -np.log(positive_prob + 1e-10)
+        if negative_indices.size:
+            loss -= np.sum(np.log(1.0 - negative_probs + 1e-10))
+
+        positive_error = positive_prob - 1.0
+        negative_errors = negative_probs
+
+        grad_h_hat = positive_error * positive_output
+        if negative_indices.size:
+            grad_h_hat += negative_outputs @ negative_errors
+
+        self.context_matrix[:, target_idx] -= learning_rate * positive_error * h_hat
+        if negative_indices.size:
+            negative_updates = np.outer(negative_errors, h_hat)
+            np.add.at(self.context_matrix.T, negative_indices, -learning_rate * negative_updates)
+
+        context_gradient = grad_h_hat / len(context_indices)
+        np.add.at(self.embedding_matrix, context_indices, -learning_rate * context_gradient)
+
+        return float(loss)
+
+    def normalize_context_ids(self, context_words: Sequence[str] | Sequence[int]) -> List[int]:
+        """
+        Normalize context inputs into vocabulary indices.
+
+        Args:
+            context_words: Context words represented as strings or token ids.
+
+        Returns:
+            List[int]: Normalized context token ids.
+        """
+        if not context_words:
+            return []
+
+        first_item = context_words[0]
+        if isinstance(first_item, str):
+            return self.words_to_ids(context_words)
+
+        return [int(word_idx) for word_idx in context_words]
+
+    def normalize_target_idx(self, target_word: str | Number) -> int:
+        """
+        Normalize a target input into a vocabulary index.
+
+        Args:
+            target_word: Target word represented as a string or token id.
+
+        Returns:
+            int: Vocabulary index of the target word.
+        """
+        if isinstance(target_word, str):
+            target_idx = self.word2idx.get(target_word)
+            if target_idx is None:
+                raise ValueError(f"Word '{target_word}' not in vocabulary.")
+            return target_idx
+
+        return int(target_word)
 
     def compute_gradients(
         self,
@@ -298,7 +532,13 @@ class Word2VecCBOW:
             word_idx = self.word2idx[word]
             self.embedding_matrix[word_idx] -= learning_rate * grad_context_vector
 
-    def train_example(self, context_words: Sequence[str], target_word: str, learning_rate: float = 0.01) -> float:
+    def train_example(
+        self,
+        context_words: Sequence[str] | Sequence[int],
+        target_word: str | Number,
+        learning_rate: float = 0.01,
+        num_negative_samples: int = 5,
+    ) -> float:
         """
         Train the model on a single CBOW example.
 
@@ -306,25 +546,30 @@ class Word2VecCBOW:
             context_words: Context words surrounding the target word.
             target_word: Ground-truth target word.
             learning_rate: Gradient descent learning rate.
+            num_negative_samples: Number of negative samples to use during
+            training.
 
         Returns:
             float: Loss value for the training example.
         """
-        h_hat, probs = self.forward(context_words)
-        self.backward(context_words, target_word, h_hat, probs, learning_rate)
-
-        loss = self.compute_loss(probs, target_word)
-
-        return loss
+        context_word_ids = self.normalize_context_ids(context_words)
+        target_idx = self.normalize_target_idx(target_word)
+        return self.train_example_negative_sampling(
+            context_word_ids,
+            target_idx,
+            learning_rate=learning_rate,
+            num_negative_samples=num_negative_samples,
+        )
 
     def train(
         self,
-        contexts: List[Sequence[str]],
-        target_words: List[str],
+        contexts: List[Sequence[str] | Sequence[int]],
+        target_words: List[str | Number],
         epochs: int = 100,
         learning_rate: float = 0.01,
         max_epochs_without_loss_improvement: int = 10,
         timeout: float | None = None,
+        num_negative_samples: int = 5,
     ) -> None:
         """
         Train the CBOW model across multiple epochs.
@@ -338,25 +583,33 @@ class Word2VecCBOW:
             epoch loss.
             timeout: Maximum wall-clock time (in seconds) to spend training.
             If None or <= 0, timeout is disabled.
+            num_negative_samples: Number of negative samples to draw per update.
         """
         losses = []
         epochs_without_loss_improvement = 0
         best_loss = float("inf")
         start_time = time.perf_counter()
         timed_out = False
+        context_id_batches = [self.normalize_context_ids(context_words) for context_words in contexts]
+        target_ids = [self.normalize_target_idx(target_word) for target_word in target_words]
 
         for epoch in range(epochs):
             total_loss = 0.0
             epoch_start_time = time.perf_counter()
 
-            for context_words, target_word in zip(contexts, target_words):
+            for context_word_ids, target_idx in zip(context_id_batches, target_ids):
                 if timeout is not None and timeout > 0 and (time.perf_counter() - start_time) >= timeout:
                     timed_out = True
                     elapsed = time.perf_counter() - start_time
                     print(f"Timeout reached after {elapsed:.2f}s. Stopping training.")
                     break
 
-                example_loss = self.train_example(context_words, target_word, learning_rate=learning_rate)
+                example_loss = self.train_example_negative_sampling(
+                    context_word_ids,
+                    target_idx,
+                    learning_rate=learning_rate,
+                    num_negative_samples=num_negative_samples,
+                )
                 total_loss += example_loss
 
             if timed_out:
