@@ -440,6 +440,8 @@ Good next steps would be:
 
 ## 📚 Reference
 
-Brenndoerfer, Michael. "CBOW Model: Learning Word Embeddings by Predicting Center Words." 2025.
+1) Michael Brenndoerfer (2025). CBOW Model: Learning Word Embeddings by Predicting Center Words.
+> https://mbrenndoerfer.com/writing/cbow-model-word2vec-word-embeddings
 
-https://mbrenndoerfer.com/writing/cbow-model-word2vec-word-embeddings
+2) Abhishek Jain (2024). Negative Sampling — An optimization technique used in word2vec.
+> https://medium.com/@abhishekjainindore24/negative-sampling-an-optimization-technique-used-in-word2vec-a57f653bdb7c
