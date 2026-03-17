@@ -437,6 +437,7 @@ Good next steps would be:
 2. add cosine-similarity nearest-neighbor evaluation for learned embeddings
 3. add a small intrinsic evaluation set for analogy or similarity testing
 4. support weighted context averaging by distance from the target word
+5. add a skip-gram variant (target -> surrounding context words) to compare with CBOW; skip-gram often learns better representations for rare words, while CBOW is usually faster
 
 ## 📚 Reference
 
